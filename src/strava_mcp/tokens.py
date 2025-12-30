@@ -1,46 +1,41 @@
-"""Token management for Strava MCP server."""
+"""Token management for Strava MCP server.
+
+Stores tokens in memory only. Tokens are lost when the MCP server restarts,
+requiring re-authentication each Claude Desktop session.
+"""
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from typing import Any
 
-import keyring
-import keyring.errors
-
-# Keyring service name for secure token storage
-KEYRING_SERVICE = "strava-mcp-server"
-KEYRING_USERNAME = "strava_tokens"
+# In-memory token storage
+_tokens: dict[str, Any] | None = None
 
 
 def load_tokens() -> dict[str, Any] | None:
-    """Load saved tokens from system keychain.
+    """Load tokens from memory.
 
     Returns:
-        Token dictionary with access_token, refresh_token, expires_at, or None if not found.
+        Token dictionary with access_token, refresh_token, expires_at, or None if not set.
     """
-    tokens_json = keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME)
-    if tokens_json:
-        return json.loads(tokens_json)
-    return None
+    return _tokens
 
 
 def save_tokens(tokens: dict[str, Any]) -> None:
-    """Save tokens to system keychain.
+    """Save tokens to memory.
 
     Args:
         tokens: Token dictionary with access_token, refresh_token, expires_at.
     """
-    keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, json.dumps(tokens))
+    global _tokens
+    _tokens = tokens
 
 
 def delete_tokens() -> None:
-    """Delete tokens from system keychain."""
-    try:
-        keyring.delete_password(KEYRING_SERVICE, KEYRING_USERNAME)
-    except keyring.errors.PasswordDeleteError:
-        pass  # Token doesn't exist, nothing to delete
+    """Clear tokens from memory."""
+    global _tokens
+    _tokens = None
 
 
 def is_token_expired(tokens: dict[str, Any]) -> bool:

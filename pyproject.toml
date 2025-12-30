@@ -29,7 +29,6 @@ dependencies = [
     "uvicorn[standard]>=0.20.0",
     "jinja2>=3.0.0",
     "python-dotenv>=1.0.0",
-    "keyring>=24.0.0",
 ]
 
 [project.optional-dependencies]

@@ -1,18 +1,17 @@
 """Tests for MCP server tools."""
 
-import json
 from unittest.mock import patch
 
 import pytest
 
-from strava_mcp.tokens import KEYRING_SERVICE, KEYRING_USERNAME
+from strava_mcp.tokens import load_tokens, save_tokens
 
 
 class TestGetAuthStatus:
     """Tests for get_auth_status tool."""
 
     @pytest.mark.asyncio
-    async def test_returns_not_authenticated_when_no_tokens(self, mock_keyring):
+    async def test_returns_not_authenticated_when_no_tokens(self):
         """Should return not authenticated when no tokens exist."""
         from strava_mcp.server import get_auth_status
 
@@ -22,15 +21,11 @@ class TestGetAuthStatus:
         assert "No tokens found" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_returns_authenticated_with_valid_tokens(
-        self, mock_keyring, valid_tokens
-    ):
+    async def test_returns_authenticated_with_valid_tokens(self, valid_tokens):
         """Should return authenticated when valid tokens exist."""
         from strava_mcp.server import get_auth_status
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            valid_tokens
-        )
+        save_tokens(valid_tokens)
 
         result = await get_auth_status()
 
@@ -39,15 +34,11 @@ class TestGetAuthStatus:
         assert "ready" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_returns_expired_status_for_expired_tokens(
-        self, mock_keyring, expired_tokens
-    ):
+    async def test_returns_expired_status_for_expired_tokens(self, expired_tokens):
         """Should indicate expired status when tokens are expired."""
         from strava_mcp.server import get_auth_status
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            expired_tokens
-        )
+        save_tokens(expired_tokens)
 
         result = await get_auth_status()
 
@@ -89,7 +80,7 @@ class TestAuthenticate:
 
     @pytest.mark.asyncio
     async def test_exchanges_code_and_saves_tokens(
-        self, mock_keyring, mock_strava_client, mock_env_vars, mock_athlete
+        self, mock_strava_client, mock_env_vars, mock_athlete
     ):
         """Should exchange code for tokens and save them."""
         from strava_mcp.server import authenticate
@@ -104,12 +95,12 @@ class TestAuthenticate:
         assert result["athlete_id"] == mock_athlete.id
 
         # Verify tokens were saved
-        stored = mock_keyring._storage.get(f"{KEYRING_SERVICE}:{KEYRING_USERNAME}")
+        stored = load_tokens()
         assert stored is not None
 
     @pytest.mark.asyncio
     async def test_returns_athlete_info(
-        self, mock_keyring, mock_strava_client, mock_env_vars, mock_athlete
+        self, mock_strava_client, mock_env_vars, mock_athlete
     ):
         """Should return athlete information after authentication."""
         from strava_mcp.server import authenticate
@@ -126,22 +117,20 @@ class TestLogout:
     """Tests for logout tool."""
 
     @pytest.mark.asyncio
-    async def test_deletes_tokens(self, mock_keyring, valid_tokens):
-        """Should delete tokens from keyring."""
+    async def test_deletes_tokens(self, valid_tokens):
+        """Should delete tokens from memory."""
         from strava_mcp.server import logout
 
         # Store tokens first
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            valid_tokens
-        )
+        save_tokens(valid_tokens)
 
         result = await logout()
 
         assert result["success"] is True
-        assert f"{KEYRING_SERVICE}:{KEYRING_USERNAME}" not in mock_keyring._storage
+        assert load_tokens() is None
 
     @pytest.mark.asyncio
-    async def test_succeeds_when_no_tokens(self, mock_keyring):
+    async def test_succeeds_when_no_tokens(self):
         """Should succeed even when no tokens exist."""
         from strava_mcp.server import logout
 
@@ -156,7 +145,6 @@ class TestGetActivities:
     @pytest.mark.asyncio
     async def test_returns_activities(
         self,
-        mock_keyring,
         mock_strava_client,
         mock_env_vars,
         valid_tokens,
@@ -165,9 +153,7 @@ class TestGetActivities:
         """Should return list of activities."""
         from strava_mcp.server import get_activities
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            valid_tokens
-        )
+        save_tokens(valid_tokens)
 
         result = await get_activities(limit=5)
 
@@ -177,14 +163,12 @@ class TestGetActivities:
 
     @pytest.mark.asyncio
     async def test_parses_date_filters(
-        self, mock_keyring, mock_strava_client, mock_env_vars, valid_tokens
+        self, mock_strava_client, mock_env_vars, valid_tokens
     ):
         """Should parse and apply date filters."""
         from strava_mcp.server import get_activities
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            valid_tokens
-        )
+        save_tokens(valid_tokens)
 
         await get_activities(after="2025-12-01", before="2025-12-31", limit=10)
 
@@ -193,7 +177,7 @@ class TestGetActivities:
         assert call_args is not None
 
     @pytest.mark.asyncio
-    async def test_raises_when_not_authenticated(self, mock_keyring):
+    async def test_raises_when_not_authenticated(self):
         """Should raise error when not authenticated."""
         from strava_mcp.server import get_activities
 
@@ -207,7 +191,6 @@ class TestGetAthlete:
     @pytest.mark.asyncio
     async def test_returns_athlete_profile(
         self,
-        mock_keyring,
         mock_strava_client,
         mock_env_vars,
         valid_tokens,
@@ -216,9 +199,7 @@ class TestGetAthlete:
         """Should return athlete profile."""
         from strava_mcp.server import get_athlete
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            valid_tokens
-        )
+        save_tokens(valid_tokens)
 
         result = await get_athlete()
 
@@ -233,7 +214,6 @@ class TestGetAthleteStats:
     @pytest.mark.asyncio
     async def test_returns_stats(
         self,
-        mock_keyring,
         mock_strava_client,
         mock_env_vars,
         valid_tokens,
@@ -242,9 +222,7 @@ class TestGetAthleteStats:
         """Should return athlete statistics."""
         from strava_mcp.server import get_athlete_stats
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            valid_tokens
-        )
+        save_tokens(valid_tokens)
 
         result = await get_athlete_stats()
 
@@ -254,14 +232,12 @@ class TestGetAthleteStats:
 
     @pytest.mark.asyncio
     async def test_accepts_athlete_id(
-        self, mock_keyring, mock_strava_client, mock_env_vars, valid_tokens
+        self, mock_strava_client, mock_env_vars, valid_tokens
     ):
         """Should accept an athlete_id parameter."""
         from strava_mcp.server import get_athlete_stats
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            valid_tokens
-        )
+        save_tokens(valid_tokens)
 
         await get_athlete_stats(athlete_id=12345678)
 
@@ -277,7 +253,6 @@ class TestGetActivityDetails:
     @pytest.mark.asyncio
     async def test_returns_activity_details(
         self,
-        mock_keyring,
         mock_strava_client,
         mock_env_vars,
         valid_tokens,
@@ -286,9 +261,7 @@ class TestGetActivityDetails:
         """Should return detailed activity information."""
         from strava_mcp.server import get_activity_details
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            valid_tokens
-        )
+        save_tokens(valid_tokens)
 
         result = await get_activity_details(activity_id=9876543210)
 
@@ -298,14 +271,12 @@ class TestGetActivityDetails:
 
     @pytest.mark.asyncio
     async def test_calls_client_with_activity_id(
-        self, mock_keyring, mock_strava_client, mock_env_vars, valid_tokens
+        self, mock_strava_client, mock_env_vars, valid_tokens
     ):
         """Should call client.get_activity with correct activity_id."""
         from strava_mcp.server import get_activity_details
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            valid_tokens
-        )
+        save_tokens(valid_tokens)
 
         await get_activity_details(activity_id=123456)
 
@@ -317,14 +288,12 @@ class TestTokenRefresh:
 
     @pytest.mark.asyncio
     async def test_refreshes_expired_tokens(
-        self, mock_keyring, mock_strava_client, mock_env_vars, expired_tokens
+        self, mock_strava_client, mock_env_vars, expired_tokens
     ):
         """Should refresh tokens when they're expired."""
         from strava_mcp.server import get_athlete
 
-        mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"] = json.dumps(
-            expired_tokens
-        )
+        save_tokens(expired_tokens)
 
         await get_athlete()
 
@@ -332,7 +301,5 @@ class TestTokenRefresh:
         mock_strava_client.return_value.refresh_access_token.assert_called_once()
 
         # Verify new tokens were saved
-        stored = json.loads(
-            mock_keyring._storage[f"{KEYRING_SERVICE}:{KEYRING_USERNAME}"]
-        )
+        stored = load_tokens()
         assert stored["access_token"] == "refreshed_token"

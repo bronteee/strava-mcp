@@ -5,38 +5,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from strava_mcp import tokens
 
-@pytest.fixture
-def mock_keyring():
-    """Mock keyring for token storage tests."""
-    storage = {}
 
-    def get_password(service, username):
-        key = f"{service}:{username}"
-        return storage.get(key)
-
-    def set_password(service, username, password):
-        key = f"{service}:{username}"
-        storage[key] = password
-
-    def delete_password(service, username):
-        key = f"{service}:{username}"
-        if key in storage:
-            del storage[key]
-        else:
-            # Simulate keyring behavior
-            from keyring.errors import PasswordDeleteError
-
-            raise PasswordDeleteError("Password not found")
-
-    with patch("strava_mcp.tokens.keyring") as mock:
-        mock.get_password = MagicMock(side_effect=get_password)
-        mock.set_password = MagicMock(side_effect=set_password)
-        mock.delete_password = MagicMock(side_effect=delete_password)
-        mock.errors = MagicMock()
-        mock.errors.PasswordDeleteError = Exception
-        mock._storage = storage  # Expose for test inspection
-        yield mock
+@pytest.fixture(autouse=True)
+def reset_tokens():
+    """Reset in-memory tokens before each test."""
+    tokens._tokens = None
+    yield
+    tokens._tokens = None
 
 
 @pytest.fixture

@@ -7,7 +7,6 @@ An MCP (Model Context Protocol) server that connects Claude to your Strava data.
 - **OAuth Authentication**: Secure authentication with automatic token refresh
 - **Activity Data**: Get recent activities, detailed activity info, and stats
 - **Athlete Profile**: Access your Strava profile and statistics
-- **Secure Storage**: Tokens stored in your system keychain
 
 ## Installation
 
@@ -69,12 +68,14 @@ If installed with uv, use:
 
 ## Usage
 
-### First-Time Authentication
+### Authentication
 
 1. Ask Claude: "Connect to my Strava account"
 2. Claude will provide an authorization URL
 3. Open the URL in your browser and authorize the app
-4. Tokens are saved automatically to your system keychain
+4. You're connected for the current session
+
+**Note**: Tokens are stored in memory only. You'll need to re-authenticate each time Claude Desktop restarts.
 
 ### Available Tools
 
@@ -103,13 +104,19 @@ If installed with uv, use:
 ```bash
 git clone https://github.com/bronteee/strava-mcp.git
 cd strava-mcp
-pip install -e ".[dev]"
+uv sync --dev
 ```
 
 ### Run Tests
 
 ```bash
-pytest
+uv run pytest
+```
+
+### Type Check
+
+```bash
+uv run ty check src
 ```
 
 ### Run the Server Manually
@@ -125,7 +132,7 @@ strava-mcp
 
 ## Security
 
-- Tokens are stored in your system keychain (macOS Keychain, Windows Credential Manager, etc.)
+- Tokens are stored in memory only and cleared when the server stops
 - Client credentials are passed via environment variables, never stored in files
 - OAuth flow uses localhost callback - no external servers involved
 
