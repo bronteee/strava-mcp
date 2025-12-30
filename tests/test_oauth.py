@@ -157,9 +157,7 @@ class TestOAuthCallback:
         assert saved["access_token"] == "new_access_token"
 
     @pytest.mark.asyncio
-    async def test_callback_shows_success_page(
-        self, mock_oauth_env, mock_oauth_client
-    ):
+    async def test_callback_shows_success_page(self, mock_oauth_env, mock_oauth_client):
         """Should show success page with athlete info."""
         from strava_mcp.oauth import app
 
