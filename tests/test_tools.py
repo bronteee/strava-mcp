@@ -177,12 +177,15 @@ class TestGetActivities:
         assert call_args is not None
 
     @pytest.mark.asyncio
-    async def test_raises_when_not_authenticated(self):
-        """Should raise error when not authenticated."""
+    async def test_returns_error_when_not_authenticated(self):
+        """Should return error dict when not authenticated."""
         from strava_mcp.server import get_activities
 
-        with pytest.raises(ValueError, match="Not authenticated"):
-            await get_activities()
+        result = await get_activities()
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert result["error"] == "validation_error"
+        assert "Not authenticated" in result["message"]
 
 
 class TestGetAthlete:

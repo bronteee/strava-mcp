@@ -8,8 +8,10 @@
     <div class="alert alert-success">
         <h2>✅ Authorization Successful!</h2>
     </div>
-    
+
+    {% if athlete %}
     <p>Hi, <strong>{{ athlete.firstname }} {{ athlete.lastname }}</strong>!</p>
+    {% endif %}
     
     {% if mcp_ready %}
     <div class="panel panel-info">
@@ -17,7 +19,7 @@
             <h3 class="panel-title">🔌 MCP Server Ready</h3>
         </div>
         <div class="panel-body">
-            <p>Your tokens have been securely saved to the system keychain.</p>
+            <p>Your tokens have been securely saved.</p>
             <p>The <strong>Strava MCP Server</strong> can now access your activities!</p>
             <p>You can close this window and use the MCP tools:</p>
             <ul>
@@ -28,11 +30,6 @@
         </div>
     </div>
     {% endif %}
-
-    <details>
-        <summary>Token Details (for debugging)</summary>
-        <pre>{{ access_token|tojson(indent=2) }}</pre>
-    </details>
 </div>
 </body>
 </html>

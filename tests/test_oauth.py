@@ -7,6 +7,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from strava_mcp import tokens
+from strava_mcp.oauth import generate_oauth_state
 
 
 @pytest.fixture
@@ -105,16 +106,34 @@ class TestOAuthCallback:
     async def test_callback_without_code_shows_error(
         self, mock_oauth_env, mock_oauth_client
     ):
-        """Should show error when code is missing."""
+        """Should show error when code is missing but state is valid."""
+        from strava_mcp.oauth import app
+
+        # Generate a valid state first
+        state = generate_oauth_state()
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get(f"/strava-oauth?state={state}")
+
+        assert response.status_code == 200
+        assert "missing" in response.text.lower()
+
+    @pytest.mark.asyncio
+    async def test_callback_without_state_shows_csrf_error(
+        self, mock_oauth_env, mock_oauth_client
+    ):
+        """Should show CSRF error when state is missing."""
         from strava_mcp.oauth import app
 
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            response = await client.get("/strava-oauth")
+            response = await client.get("/strava-oauth?code=test_auth_code")
 
         assert response.status_code == 200
-        assert "missing" in response.text.lower()
+        assert "csrf" in response.text.lower() or "state" in response.text.lower()
 
     @pytest.mark.asyncio
     async def test_callback_exchanges_code_for_tokens(
@@ -123,10 +142,15 @@ class TestOAuthCallback:
         """Should exchange code for tokens and save them."""
         from strava_mcp.oauth import app
 
+        # Generate a valid state first
+        state = generate_oauth_state()
+
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            response = await client.get("/strava-oauth?code=test_auth_code")
+            response = await client.get(
+                f"/strava-oauth?code=test_auth_code&state={state}"
+            )
 
         assert response.status_code == 200
 
@@ -144,10 +168,15 @@ class TestOAuthCallback:
         """Should save tokens to memory after successful auth."""
         from strava_mcp.oauth import app
 
+        # Generate a valid state first
+        state = generate_oauth_state()
+
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            response = await client.get("/strava-oauth?code=test_auth_code")
+            response = await client.get(
+                f"/strava-oauth?code=test_auth_code&state={state}"
+            )
 
         assert response.status_code == 200
 
@@ -161,10 +190,15 @@ class TestOAuthCallback:
         """Should show success page with athlete info."""
         from strava_mcp.oauth import app
 
+        # Generate a valid state first
+        state = generate_oauth_state()
+
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            response = await client.get("/strava-oauth?code=test_auth_code")
+            response = await client.get(
+                f"/strava-oauth?code=test_auth_code&state={state}"
+            )
 
         assert response.status_code == 200
         # Should contain athlete name

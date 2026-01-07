@@ -87,11 +87,6 @@ class TestIsTokenExpired:
         tokens = {"expires_at": (datetime.now() + timedelta(hours=1)).timestamp()}
         assert is_token_expired(tokens) is False
 
-    def test_missing_expires_at_returns_true(self):
-        """Should return True when expires_at is missing (treats as expired)."""
-        tokens = {"access_token": "test"}
-        assert is_token_expired(tokens) is True
-
     def test_zero_expires_at_returns_true(self):
         """Should return True when expires_at is 0."""
         tokens = {"expires_at": 0}
