@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(uv run pytest:*)"
+      "Bash(uv run pytest:*)",
+      "Bash(gh pr list:*)",
+      "Bash(git show:*)"
     ]
   }
 }

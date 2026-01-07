@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import functools
 import threading
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any, ParamSpec
 
 import requests
 import uvicorn
@@ -26,7 +26,7 @@ from .tokens import (
     token_response_to_dict,
 )
 
-T = TypeVar("T")
+P = ParamSpec("P")
 
 load_dotenv(override=True)
 
@@ -117,7 +117,7 @@ def get_authenticated_client() -> Client:
     return Client(
         access_token=tokens["access_token"],
         refresh_token=tokens["refresh_token"],
-        token_expires=tokens.get("expires_at"),
+        token_expires=int(tokens["expires_at"]),
     )
 
 
@@ -126,7 +126,9 @@ def get_authenticated_client() -> Client:
 # =============================================================================
 
 
-def handle_strava_errors(func: Callable[..., T]) -> Callable[..., T]:
+def handle_strava_errors(
+    func: Callable[P, Awaitable[dict[str, Any] | list[dict[str, Any]]]],
+) -> Callable[P, Awaitable[dict[str, Any] | list[dict[str, Any]]]]:
     """Decorator to handle Strava API errors gracefully.
 
     Catches common exceptions and returns structured error responses
@@ -135,7 +137,7 @@ def handle_strava_errors(func: Callable[..., T]) -> Callable[..., T]:
 
     @functools.wraps(func)
     async def wrapper(
-        *args: Any, **kwargs: Any
+        *args: P.args, **kwargs: P.kwargs
     ) -> dict[str, Any] | list[dict[str, Any]]:
         try:
             return await func(*args, **kwargs)
