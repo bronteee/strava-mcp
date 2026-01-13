@@ -855,6 +855,466 @@ async def get_route(route_id: int) -> dict[str, Any]:
     return await asyncio.to_thread(_fetch_route, route_id)
 
 
+# =============================================================================
+# Club Tools
+# =============================================================================
+
+STRAVA_CLUB_WEB_URL = "https://www.strava.com/clubs"
+STRAVA_CLUB_APP_URL = "strava://clubs"
+
+
+def _fetch_athlete_clubs(limit: int | None) -> list[dict[str, Any]]:
+    """Fetch athlete's clubs (sync helper)."""
+    client = get_authenticated_client()
+    clubs = client.get_athlete_clubs(limit=limit)
+
+    results = []
+    for club in clubs:
+        club_data = {
+            "id": club.id,
+            "name": club.name,
+            "sport_type": club.sport_type,
+            "city": club.city,
+            "state": club.state,
+            "country": club.country,
+            "member_count": club.member_count,
+            "private": club.private,
+            "profile_medium": club.profile_medium,
+            "links": {
+                "web": f"{STRAVA_CLUB_WEB_URL}/{club.id}",
+                "app": f"{STRAVA_CLUB_APP_URL}/{club.id}",
+            },
+        }
+        results.append(club_data)
+
+    return results
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_my_clubs(
+    limit: int | None = None,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get clubs the authenticated athlete is a member of.
+
+    Args:
+        limit: Maximum number of clubs to return (optional).
+
+    Returns:
+        List of clubs with details and deeplinks.
+    """
+    if limit is not None and limit < 1:
+        return {"error": "validation_error", "message": "limit must be at least 1"}
+
+    clubs = await asyncio.to_thread(_fetch_athlete_clubs, limit)
+
+    return {
+        "count": len(clubs),
+        "clubs": clubs,
+    }
+
+
+def _fetch_club(club_id: int) -> dict[str, Any]:
+    """Fetch club details (sync helper)."""
+    client = get_authenticated_client()
+    club = client.get_club(club_id)
+
+    return {
+        "id": club.id,
+        "name": club.name,
+        "description": club.description,
+        "sport_type": club.sport_type,
+        "city": club.city,
+        "state": club.state,
+        "country": club.country,
+        "member_count": club.member_count,
+        "private": club.private,
+        "verified": club.verified,
+        "profile_medium": club.profile_medium,
+        "cover_photo": club.cover_photo,
+        "links": {
+            "web": f"{STRAVA_CLUB_WEB_URL}/{club.id}",
+            "app": f"{STRAVA_CLUB_APP_URL}/{club.id}",
+        },
+    }
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_club(club_id: int) -> dict[str, Any]:
+    """Get detailed information about a specific club.
+
+    Args:
+        club_id: The unique ID of the club.
+
+    Returns:
+        Full club details including description and deeplinks.
+    """
+    if club_id < 1:
+        return {
+            "error": "validation_error",
+            "message": "club_id must be a positive integer",
+        }
+
+    return await asyncio.to_thread(_fetch_club, club_id)
+
+
+def _fetch_club_members(club_id: int, limit: int | None) -> list[dict[str, Any]]:
+    """Fetch club members (sync helper)."""
+    client = get_authenticated_client()
+    members = client.get_club_members(club_id, limit=limit)
+
+    results = []
+    for member in members:
+        member_data = {
+            "firstname": member.firstname,
+            "lastname": member.lastname,
+            "admin": member.admin,
+            "owner": member.owner,
+        }
+        results.append(member_data)
+
+    return results
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_club_members(
+    club_id: int,
+    limit: int = 30,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get members of a specific club.
+
+    Args:
+        club_id: The unique ID of the club.
+        limit: Maximum number of members to return (default 30, max 200).
+
+    Returns:
+        List of club members with basic profile info.
+    """
+    if club_id < 1:
+        return {
+            "error": "validation_error",
+            "message": "club_id must be a positive integer",
+        }
+    if limit < 1:
+        return {"error": "validation_error", "message": "limit must be at least 1"}
+    limit = min(limit, 200)
+
+    members = await asyncio.to_thread(_fetch_club_members, club_id, limit)
+
+    return {
+        "club_id": club_id,
+        "count": len(members),
+        "members": members,
+    }
+
+
+def _fetch_club_activities(club_id: int, limit: int | None) -> list[dict[str, Any]]:
+    """Fetch club activities (sync helper)."""
+    client = get_authenticated_client()
+    activities = client.get_club_activities(club_id, limit=limit)
+
+    results = []
+    for activity in activities:
+        activity_data = {
+            "name": activity.name,
+            "type": activity.type,
+            "distance": activity.distance,
+            "moving_time": activity.moving_time,
+            "total_elevation_gain": activity.total_elevation_gain,
+            "athlete": {
+                "firstname": activity.athlete.firstname if activity.athlete else None,
+                "lastname": activity.athlete.lastname if activity.athlete else None,
+            },
+        }
+        results.append(activity_data)
+
+    return results
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_club_activities(
+    club_id: int,
+    limit: int = 30,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get recent activities from club members.
+
+    Args:
+        club_id: The unique ID of the club.
+        limit: Maximum number of activities to return (default 30, max 200).
+
+    Returns:
+        List of recent club activities with athlete info.
+    """
+    if club_id < 1:
+        return {
+            "error": "validation_error",
+            "message": "club_id must be a positive integer",
+        }
+    if limit < 1:
+        return {"error": "validation_error", "message": "limit must be at least 1"}
+    limit = min(limit, 200)
+
+    activities = await asyncio.to_thread(_fetch_club_activities, club_id, limit)
+
+    return {
+        "club_id": club_id,
+        "count": len(activities),
+        "activities": activities,
+    }
+
+
+# =============================================================================
+# Activity Engagement Tools
+# =============================================================================
+
+STRAVA_ATHLETE_WEB_URL = "https://www.strava.com/athletes"
+
+
+def _fetch_activity_kudos(activity_id: int, limit: int | None) -> list[dict[str, Any]]:
+    """Fetch activity kudos (sync helper)."""
+    client = get_authenticated_client()
+    kudoers = client.get_activity_kudos(activity_id, limit=limit)
+
+    results = []
+    for athlete in kudoers:
+        kudoer_data = {
+            "id": athlete.id,
+            "firstname": athlete.firstname,
+            "lastname": athlete.lastname,
+            "profile_medium": athlete.profile_medium,
+            "links": {
+                "web": f"{STRAVA_ATHLETE_WEB_URL}/{athlete.id}",
+            },
+        }
+        results.append(kudoer_data)
+
+    return results
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_activity_kudos(
+    activity_id: int,
+    limit: int = 30,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get athletes who gave kudos to an activity.
+
+    Args:
+        activity_id: The unique ID of the activity.
+        limit: Maximum number of kudoers to return (default 30, max 200).
+
+    Returns:
+        List of athletes who gave kudos with profile links.
+    """
+    if activity_id < 1:
+        return {
+            "error": "validation_error",
+            "message": "activity_id must be a positive integer",
+        }
+    if limit < 1:
+        return {"error": "validation_error", "message": "limit must be at least 1"}
+    limit = min(limit, 200)
+
+    kudoers = await asyncio.to_thread(_fetch_activity_kudos, activity_id, limit)
+
+    return {
+        "activity_id": activity_id,
+        "count": len(kudoers),
+        "kudoers": kudoers,
+    }
+
+
+def _fetch_activity_comments(
+    activity_id: int, limit: int | None
+) -> list[dict[str, Any]]:
+    """Fetch activity comments (sync helper)."""
+    client = get_authenticated_client()
+    comments = client.get_activity_comments(activity_id, limit=limit)
+
+    results = []
+    for comment in comments:
+        comment_data = {
+            "id": comment.id,
+            "text": comment.text,
+            "created_at": _format_timestamp(comment.created_at),
+            "athlete": {
+                "id": comment.athlete.id if comment.athlete else None,
+                "firstname": comment.athlete.firstname if comment.athlete else None,
+                "lastname": comment.athlete.lastname if comment.athlete else None,
+                "links": {
+                    "web": f"{STRAVA_ATHLETE_WEB_URL}/{comment.athlete.id}"
+                    if comment.athlete
+                    else None,
+                },
+            },
+        }
+        results.append(comment_data)
+
+    return results
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_activity_comments(
+    activity_id: int,
+    limit: int = 30,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get comments on an activity.
+
+    Args:
+        activity_id: The unique ID of the activity.
+        limit: Maximum number of comments to return (default 30, max 200).
+
+    Returns:
+        List of comments with text, timestamps, and athlete info.
+    """
+    if activity_id < 1:
+        return {
+            "error": "validation_error",
+            "message": "activity_id must be a positive integer",
+        }
+    if limit < 1:
+        return {"error": "validation_error", "message": "limit must be at least 1"}
+    limit = min(limit, 200)
+
+    comments = await asyncio.to_thread(_fetch_activity_comments, activity_id, limit)
+
+    return {
+        "activity_id": activity_id,
+        "count": len(comments),
+        "comments": comments,
+    }
+
+
+# =============================================================================
+# Athlete Social Tools
+# =============================================================================
+
+
+def _fetch_athlete_koms(athlete_id: int | None, limit: int) -> list[dict[str, Any]]:
+    """Fetch athlete KOMs/CRs (sync helper)."""
+    client = get_authenticated_client()
+
+    # If no athlete_id provided, get the authenticated athlete's ID
+    resolved_athlete_id: int
+    if athlete_id is None:
+        athlete = client.get_athlete()
+        resolved_athlete_id = athlete.id  # type: ignore[assignment]
+    else:
+        resolved_athlete_id = athlete_id
+
+    efforts = client.get_athlete_koms(resolved_athlete_id, limit=limit)
+
+    results = []
+    for effort in efforts:
+        effort_data = {
+            "id": effort.id,
+            "name": effort.name,
+            "elapsed_time": effort.elapsed_time,
+            "moving_time": effort.moving_time,
+            "start_date": _format_timestamp(effort.start_date),
+            "distance": effort.distance,
+            "segment": {
+                "id": effort.segment.id if effort.segment else None,
+                "name": effort.segment.name if effort.segment else None,
+                "links": {
+                    "web": f"{STRAVA_SEGMENT_WEB_URL}/{effort.segment.id}"
+                    if effort.segment
+                    else None,
+                    "app": f"{STRAVA_SEGMENT_APP_URL}/{effort.segment.id}"
+                    if effort.segment
+                    else None,
+                },
+            },
+            "activity": {
+                "id": effort.activity.id if effort.activity else None,
+            },
+        }
+        results.append(effort_data)
+
+    return results
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_my_koms(
+    limit: int = 30,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get KOMs (King/Queen of the Mountain) and CRs (Course Records) for the authenticated athlete.
+
+    Args:
+        limit: Maximum number of KOMs to return (default 30, max 200).
+
+    Returns:
+        List of segment efforts where the athlete holds the KOM/CR.
+    """
+    if limit < 1:
+        return {"error": "validation_error", "message": "limit must be at least 1"}
+    limit = min(limit, 200)
+
+    koms = await asyncio.to_thread(_fetch_athlete_koms, None, limit)
+
+    return {
+        "count": len(koms),
+        "koms": koms,
+    }
+
+
+def _fetch_starred_segments(limit: int | None) -> list[dict[str, Any]]:
+    """Fetch starred segments (sync helper)."""
+    client = get_authenticated_client()
+    segments = client.get_starred_segments(limit=limit)
+
+    results = []
+    for segment in segments:
+        segment_data = {
+            "id": segment.id,
+            "name": segment.name,
+            "activity_type": segment.activity_type,
+            "distance": segment.distance,
+            "average_grade": segment.average_grade,
+            "climb_category": segment.climb_category,
+            "city": segment.city,
+            "state": segment.state,
+            "country": segment.country,
+            "links": {
+                "web": f"{STRAVA_SEGMENT_WEB_URL}/{segment.id}",
+                "app": f"{STRAVA_SEGMENT_APP_URL}/{segment.id}",
+            },
+        }
+        results.append(segment_data)
+
+    return results
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_starred_segments(
+    limit: int = 30,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get segments starred by the authenticated athlete.
+
+    Args:
+        limit: Maximum number of segments to return (default 30, max 200).
+
+    Returns:
+        List of starred segments with details and deeplinks.
+    """
+    if limit < 1:
+        return {"error": "validation_error", "message": "limit must be at least 1"}
+    limit = min(limit, 200)
+
+    segments = await asyncio.to_thread(_fetch_starred_segments, limit)
+
+    return {
+        "count": len(segments),
+        "segments": segments,
+    }
+
+
 def main() -> None:
     """Main entry point for the MCP server."""
     # Try to start OAuth server when MCP server loads (non-blocking on failure)
