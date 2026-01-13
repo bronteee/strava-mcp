@@ -131,7 +131,14 @@ def mock_athlete_stats():
 
 
 @pytest.fixture
-def mock_strava_client(mock_athlete, mock_activity, mock_athlete_stats):
+def mock_strava_client(
+    mock_athlete,
+    mock_activity,
+    mock_athlete_stats,
+    mock_segment,
+    mock_segment_explorer_result,
+    mock_route,
+):
     """Return a fully mocked Strava client."""
     with patch("strava_mcp.server.Client") as mock_client:
         client_instance = MagicMock()
@@ -147,6 +154,18 @@ def mock_strava_client(mock_athlete, mock_activity, mock_athlete_stats):
 
         # Mock get_athlete_stats
         client_instance.get_athlete_stats.return_value = mock_athlete_stats
+
+        # Mock explore_segments
+        client_instance.explore_segments.return_value = [mock_segment_explorer_result]
+
+        # Mock get_segment
+        client_instance.get_segment.return_value = mock_segment
+
+        # Mock get_routes - returns an iterator
+        client_instance.get_routes.return_value = iter([mock_route])
+
+        # Mock get_route
+        client_instance.get_route.return_value = mock_route
 
         # Mock token refresh
         client_instance.refresh_access_token.return_value = {
@@ -184,3 +203,82 @@ def mock_env_vars():
         },
     ):
         yield
+
+
+@pytest.fixture
+def mock_segment():
+    """Return a mock Strava segment."""
+    segment = MagicMock()
+    segment.id = 12345
+    segment.name = "Test Hill Climb"
+    segment.activity_type = "Run"
+    segment.distance = 1500.0
+    segment.average_grade = 4.5
+    segment.maximum_grade = 12.0
+    segment.elevation_high = 150.0
+    segment.elevation_low = 100.0
+    segment.total_elevation_gain = 50.0
+    segment.climb_category = 3
+    segment.city = "San Francisco"
+    segment.state = "CA"
+    segment.country = "United States"
+    segment.start_latlng = [37.7749, -122.4194]
+    segment.end_latlng = [37.7850, -122.4094]
+    segment.effort_count = 5000
+    segment.athlete_count = 1500
+    segment.star_count = 250
+    segment.map = MagicMock()
+    segment.map.polyline = "encoded_polyline_string"
+    return segment
+
+
+@pytest.fixture
+def mock_segment_explorer_result():
+    """Return a mock segment explorer result."""
+    result = MagicMock()
+    result.id = 12345
+    result.name = "Test Hill Climb"
+    result.climb_category = 3
+    result.avg_grade = 4.5
+    result.start_latlng = [37.7749, -122.4194]
+    result.end_latlng = [37.7850, -122.4094]
+    result.elev_difference = 50.0
+    result.distance = 1500.0
+    return result
+
+
+@pytest.fixture
+def mock_route():
+    """Return a mock Strava route."""
+    route = MagicMock()
+    route.id = 98765
+    route.name = "Morning Loop"
+    route.description = "A nice morning run route"
+    route.distance = 8000.0
+    route.elevation_gain = 150.0
+    route.type = 1  # Run
+    route.sub_type = 1
+    route.starred = False
+    route.private = False
+    route.timestamp = datetime(2025, 1, 1, 10, 0, 0)
+    route.map = MagicMock()
+    route.map.polyline = "route_polyline_string"
+    route.map.summary_polyline = "route_summary_polyline"
+    route.segments = []
+    return route
+
+
+@pytest.fixture
+def mock_geocoder():
+    """Return a mock geocoder."""
+    with patch("strava_mcp.server.Nominatim") as mock_nom:
+        mock_location = MagicMock()
+        mock_location.latitude = 37.7749
+        mock_location.longitude = -122.4194
+        mock_location.address = "San Francisco, CA, USA"
+
+        mock_geolocator = MagicMock()
+        mock_geolocator.geocode.return_value = mock_location
+
+        mock_nom.return_value = mock_geolocator
+        yield mock_geolocator

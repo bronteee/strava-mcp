@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import math
 import threading
 from collections.abc import Awaitable, Callable
 from datetime import datetime
@@ -12,6 +13,7 @@ from typing import Any, ParamSpec
 import requests
 import uvicorn
 from dotenv import load_dotenv
+from geopy.geocoders import Nominatim
 from mcp.server.fastmcp import FastMCP
 from stravalib import Client
 
@@ -473,6 +475,384 @@ async def get_activity_details(activity_id: int) -> dict[str, Any]:
         }
 
     return await asyncio.to_thread(_fetch_activity_details, activity_id)
+
+
+# =============================================================================
+# Geocoding Tools
+# =============================================================================
+
+# Nominatim geocoder (uses OpenStreetMap - free, no API key required)
+_geocoder = Nominatim(user_agent="strava-mcp/1.0")
+
+
+def _geocode_location(query: str, radius_km: float) -> dict[str, Any]:
+    """Geocode a location and return bounds (sync helper)."""
+    location = _geocoder.geocode(query, exactly_one=True)
+
+    if not location:
+        raise ValueError(f"Could not find location: {query}")
+
+    lat, lng = location.latitude, location.longitude
+
+    # Calculate bounds from center point and radius
+    # Rough approximation: 1 degree latitude ≈ 111km
+    # 1 degree longitude ≈ 111km * cos(latitude)
+    lat_offset = radius_km / 111.0
+    lng_offset = radius_km / (111.0 * math.cos(math.radians(lat)))
+
+    return {
+        "query": query,
+        "location": {
+            "name": location.address,
+            "latitude": lat,
+            "longitude": lng,
+        },
+        "bounds": {
+            "sw_lat": lat - lat_offset,
+            "sw_lng": lng - lng_offset,
+            "ne_lat": lat + lat_offset,
+            "ne_lng": lng + lng_offset,
+        },
+        "radius_km": radius_km,
+    }
+
+
+@mcp.tool()
+@handle_strava_errors
+async def geocode_location(
+    query: str,
+    radius_km: float = 5.0,
+) -> dict[str, Any]:
+    """Convert a location name to geographic bounds for segment search.
+
+    Args:
+        query: Location name (e.g., "Central Park, NYC", "Golden Gate Park, SF").
+        radius_km: Search radius in kilometers from center (default 5.0).
+
+    Returns:
+        Location details and bounding box coordinates for use with explore_running_segments.
+    """
+    if not query or not query.strip():
+        return {"error": "validation_error", "message": "Query cannot be empty"}
+
+    if radius_km <= 0:
+        return {
+            "error": "validation_error",
+            "message": "radius_km must be positive",
+        }
+
+    if radius_km > 50:
+        return {
+            "error": "validation_error",
+            "message": "radius_km must be <= 50km to avoid too large search areas",
+        }
+
+    return await asyncio.to_thread(_geocode_location, query.strip(), radius_km)
+
+
+# =============================================================================
+# Segment Tools
+# =============================================================================
+
+STRAVA_SEGMENT_WEB_URL = "https://www.strava.com/segments"
+STRAVA_SEGMENT_APP_URL = "strava://segments"
+
+
+def _explore_segments(
+    bounds: tuple[float, float, float, float],
+    activity_type: str,
+    min_cat: int | None,
+    max_cat: int | None,
+) -> list[dict[str, Any]]:
+    """Explore segments in an area (sync helper)."""
+    client = get_authenticated_client()
+    segments = client.explore_segments(
+        bounds=bounds,
+        activity_type=activity_type,
+        min_cat=min_cat,
+        max_cat=max_cat,
+    )
+
+    results = []
+    for seg in segments:
+        segment_data = {
+            "id": seg.id,
+            "name": seg.name,
+            "climb_category": seg.climb_category,
+            "avg_grade": seg.avg_grade,
+            "start_latlng": list(seg.start_latlng) if seg.start_latlng else None,
+            "end_latlng": list(seg.end_latlng) if seg.end_latlng else None,
+            "elev_difference": seg.elev_difference,
+            "distance": seg.distance,
+            "links": {
+                "web": f"{STRAVA_SEGMENT_WEB_URL}/{seg.id}",
+                "app": f"{STRAVA_SEGMENT_APP_URL}/{seg.id}",
+            },
+        }
+        results.append(segment_data)
+
+    return results
+
+
+@mcp.tool()
+@handle_strava_errors
+async def explore_running_segments(
+    location: str | None = None,
+    bounds: list[float] | None = None,
+    radius_km: float = 5.0,
+    min_cat: int | None = None,
+    max_cat: int | None = None,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Search for running segments in an area.
+
+    Provide either a location name OR bounds coordinates.
+
+    Args:
+        location: Location name (e.g., "Central Park, NYC"). Will be geocoded automatically.
+        bounds: Bounding box as [sw_lat, sw_lng, ne_lat, ne_lng]. Use instead of location.
+        radius_km: Search radius in km when using location (default 5.0, max 50).
+        min_cat: Minimum climb category filter (0-5, where 0 is hardest).
+        max_cat: Maximum climb category filter (0-5).
+
+    Returns:
+        List of up to 10 running segments with details and deeplinks.
+    """
+    # Validate inputs
+    if not location and not bounds:
+        return {
+            "error": "validation_error",
+            "message": "Provide either 'location' or 'bounds'",
+        }
+
+    if location and bounds:
+        return {
+            "error": "validation_error",
+            "message": "Provide either 'location' or 'bounds', not both",
+        }
+
+    # Get bounds from location if needed
+    if location:
+        geo_result = await geocode_location(location, radius_km)
+        if "error" in geo_result:
+            return geo_result
+        bounds_dict = geo_result["bounds"]
+        bounds_tuple = (
+            bounds_dict["sw_lat"],
+            bounds_dict["sw_lng"],
+            bounds_dict["ne_lat"],
+            bounds_dict["ne_lng"],
+        )
+        location_info = geo_result["location"]
+    else:
+        if not bounds or len(bounds) != 4:
+            return {
+                "error": "validation_error",
+                "message": "bounds must be [sw_lat, sw_lng, ne_lat, ne_lng]",
+            }
+        bounds_tuple = (bounds[0], bounds[1], bounds[2], bounds[3])
+        location_info = None
+
+    # Validate climb categories
+    if min_cat is not None and (min_cat < 0 or min_cat > 5):
+        return {
+            "error": "validation_error",
+            "message": "min_cat must be between 0 and 5",
+        }
+    if max_cat is not None and (max_cat < 0 or max_cat > 5):
+        return {
+            "error": "validation_error",
+            "message": "max_cat must be between 0 and 5",
+        }
+
+    segments = await asyncio.to_thread(
+        _explore_segments, bounds_tuple, "running", min_cat, max_cat
+    )
+
+    result: dict[str, Any] = {
+        "count": len(segments),
+        "segments": segments,
+    }
+    if location_info:
+        result["searched_location"] = location_info
+
+    return result
+
+
+def _fetch_segment(segment_id: int) -> dict[str, Any]:
+    """Fetch segment details (sync helper)."""
+    client = get_authenticated_client()
+    segment = client.get_segment(segment_id)
+
+    return {
+        "id": segment.id,
+        "name": segment.name,
+        "activity_type": segment.activity_type,
+        "distance": segment.distance,
+        "average_grade": segment.average_grade,
+        "maximum_grade": segment.maximum_grade,
+        "elevation_high": segment.elevation_high,
+        "elevation_low": segment.elevation_low,
+        "total_elevation_gain": segment.total_elevation_gain,
+        "climb_category": segment.climb_category,
+        "city": segment.city,
+        "state": segment.state,
+        "country": segment.country,
+        "start_latlng": list(segment.start_latlng) if segment.start_latlng else None,
+        "end_latlng": list(segment.end_latlng) if segment.end_latlng else None,
+        "effort_count": segment.effort_count,
+        "athlete_count": segment.athlete_count,
+        "star_count": segment.star_count,
+        "map_polyline": segment.map.polyline if segment.map else None,
+        "links": {
+            "web": f"{STRAVA_SEGMENT_WEB_URL}/{segment.id}",
+            "app": f"{STRAVA_SEGMENT_APP_URL}/{segment.id}",
+        },
+    }
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_segment(segment_id: int) -> dict[str, Any]:
+    """Get detailed information about a specific segment.
+
+    Args:
+        segment_id: The unique ID of the segment.
+
+    Returns:
+        Full segment details including polyline, stats, and deeplinks.
+    """
+    if segment_id < 1:
+        return {
+            "error": "validation_error",
+            "message": "segment_id must be a positive integer",
+        }
+
+    return await asyncio.to_thread(_fetch_segment, segment_id)
+
+
+# =============================================================================
+# Route Tools
+# =============================================================================
+
+STRAVA_ROUTE_WEB_URL = "https://www.strava.com/routes"
+STRAVA_ROUTE_APP_URL = "strava://routes"
+
+
+def _format_timestamp(ts: Any) -> str | None:
+    """Format a timestamp to ISO string, handling various types."""
+    if ts is None:
+        return None
+    if hasattr(ts, "isoformat"):
+        return ts.isoformat()  # type: ignore[no-any-return]
+    return str(ts)
+
+
+def _fetch_routes(athlete_id: int | None, limit: int) -> list[dict[str, Any]]:
+    """Fetch athlete routes (sync helper)."""
+    client = get_authenticated_client()
+    routes = client.get_routes(athlete_id=athlete_id, limit=limit)
+
+    results = []
+    for route in routes:
+        route_data = {
+            "id": route.id,
+            "name": route.name,
+            "description": route.description,
+            "distance": route.distance,
+            "elevation_gain": route.elevation_gain,
+            "type": route.type,
+            "sub_type": route.sub_type,
+            "starred": route.starred,
+            "timestamp": _format_timestamp(route.timestamp),
+            "links": {
+                "web": f"{STRAVA_ROUTE_WEB_URL}/{route.id}",
+                "app": f"{STRAVA_ROUTE_APP_URL}/{route.id}",
+            },
+        }
+        results.append(route_data)
+
+    return results
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_my_routes(
+    limit: int = 20,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get routes created by the authenticated athlete.
+
+    Args:
+        limit: Maximum number of routes to return (default 20, max 200).
+
+    Returns:
+        List of routes with details and deeplinks.
+    """
+    if limit < 1:
+        return {"error": "validation_error", "message": "limit must be at least 1"}
+    limit = min(limit, 200)
+
+    routes = await asyncio.to_thread(_fetch_routes, None, limit)
+
+    return {
+        "count": len(routes),
+        "routes": routes,
+    }
+
+
+def _fetch_route(route_id: int) -> dict[str, Any]:
+    """Fetch route details (sync helper)."""
+    client = get_authenticated_client()
+    route = client.get_route(route_id)
+
+    return {
+        "id": route.id,
+        "name": route.name,
+        "description": route.description,
+        "distance": route.distance,
+        "elevation_gain": route.elevation_gain,
+        "type": route.type,
+        "sub_type": route.sub_type,
+        "starred": route.starred,
+        "private": route.private,
+        "timestamp": _format_timestamp(route.timestamp),
+        "map_polyline": route.map.polyline if route.map else None,
+        "map_summary_polyline": route.map.summary_polyline if route.map else None,
+        "segments": [
+            {
+                "id": seg.id,
+                "name": seg.name,
+                "links": {
+                    "web": f"{STRAVA_SEGMENT_WEB_URL}/{seg.id}",
+                    "app": f"{STRAVA_SEGMENT_APP_URL}/{seg.id}",
+                },
+            }
+            for seg in (route.segments or [])
+        ],
+        "links": {
+            "web": f"{STRAVA_ROUTE_WEB_URL}/{route.id}",
+            "app": f"{STRAVA_ROUTE_APP_URL}/{route.id}",
+        },
+    }
+
+
+@mcp.tool()
+@handle_strava_errors
+async def get_route(route_id: int) -> dict[str, Any]:
+    """Get detailed information about a specific route.
+
+    Args:
+        route_id: The unique ID of the route.
+
+    Returns:
+        Full route details including polyline, segments, and deeplinks.
+    """
+    if route_id < 1:
+        return {
+            "error": "validation_error",
+            "message": "route_id must be a positive integer",
+        }
+
+    return await asyncio.to_thread(_fetch_route, route_id)
 
 
 def main() -> None:
