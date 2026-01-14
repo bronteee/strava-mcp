@@ -4,6 +4,12 @@
 
 Always run these checks before creating any commit:
 
+1. **Update documentation** if adding/changing tools or features:
+   - `README.md` - Update "Available Tools" table and "Features" section
+   - `CHANGELOG.md` - Add entry describing the changes
+
+2. **Run checks**:
+
 ```bash
 # Lint and format
 uv run --extra dev ruff check src/ tests/ --fix

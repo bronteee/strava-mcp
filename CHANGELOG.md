@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-01-14
+
+### Community Features
+
+Added 8 new tools for Strava's social and community features:
+
+**Clubs**
+- `get_my_clubs` - List clubs you're a member of
+- `get_club` - Get detailed club information
+- `get_club_members` - List members of a club
+- `get_club_activities` - Recent activities from club members
+
+**Engagement**
+- `get_activity_kudos` - See who gave kudos to an activity
+- `get_activity_comments` - Get comments on an activity
+
+**Social**
+- `get_my_koms` - Your KOMs (King/Queen of the Mountain) and CRs
+- `get_starred_segments` - Your starred segments
+
+All tools include Strava web/app deeplinks and follow existing patterns for async handling, error handling, and input validation.
+
+### Contributors
+
+- bronte-audere
+- Claude Opus 4.5
+
+---
+
 ## 2026-01-07
 
 ### Security Hardening
