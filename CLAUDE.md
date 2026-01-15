@@ -24,6 +24,14 @@ uv run --extra dev pytest
 
 All checks must pass before committing.
 
+## When Fixing Bugs
+
+Always check if tests need to be added or updated:
+
+1. **Add a test** that would have caught the bug (regression test)
+2. **Update existing tests** if the fix changes expected behavior
+3. **Verify mocks** aren't hiding the bug - ensure tests actually exercise the fixed code path
+
 ## Development Commands
 
 - **Run server**: `uv run strava-mcp`

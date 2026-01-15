@@ -74,6 +74,23 @@ class TestGetAuthUrl:
         assert "oauth_server" in result
         assert "127.0.0.1" in result["oauth_server"]
 
+    @pytest.mark.asyncio
+    async def test_includes_state_parameter_for_csrf_protection(
+        self, mock_strava_client, mock_env_vars
+    ):
+        """Should include state parameter in authorization URL for CSRF protection."""
+        from strava_mcp.server import get_auth_url
+
+        with patch("strava_mcp.server.start_oauth_server", return_value=True):
+            await get_auth_url()
+
+        # Verify authorization_url was called with state parameter
+        mock_strava_client.return_value.authorization_url.assert_called_once()
+        call_kwargs = mock_strava_client.return_value.authorization_url.call_args
+        assert "state" in call_kwargs.kwargs
+        assert call_kwargs.kwargs["state"] is not None
+        assert len(call_kwargs.kwargs["state"]) > 0
+
 
 class TestAuthenticate:
     """Tests for authenticate tool."""

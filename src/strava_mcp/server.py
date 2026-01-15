@@ -17,6 +17,7 @@ from geopy.geocoders import Nominatim
 from mcp.server.fastmcp import FastMCP
 from stravalib import Client
 
+from .oauth import generate_oauth_state
 from .tokens import (
     TokenDict,
     delete_tokens,
@@ -246,11 +247,13 @@ async def get_auth_status() -> dict[str, Any]:
 def _build_auth_url(redirect_uri: str) -> str:
     """Build Strava authorization URL (sync helper for asyncio.to_thread)."""
     client = Client()
+    state = generate_oauth_state()
     return client.authorization_url(
         client_id=get_client_id(),
         redirect_uri=redirect_uri,
         approval_prompt="auto",
         scope=["read", "activity:read", "activity:read_all", "profile:read_all"],
+        state=state,
     )
 
 
