@@ -252,7 +252,13 @@ def _build_auth_url(redirect_uri: str) -> str:
         client_id=get_client_id(),
         redirect_uri=redirect_uri,
         approval_prompt="auto",
-        scope=["read", "activity:read", "activity:read_all", "profile:read_all"],
+        scope=[
+            "read",
+            "activity:read",
+            "activity:read_all",
+            "activity:write",
+            "profile:read_all",
+        ],
         state=state,
     )
 
@@ -478,6 +484,51 @@ async def get_activity_details(activity_id: int) -> dict[str, Any]:
         }
 
     return await asyncio.to_thread(_fetch_activity_details, activity_id)
+
+
+def _update_activity_description(activity_id: int, description: str) -> dict[str, Any]:
+    """Update activity description (sync helper)."""
+    client = get_authenticated_client()
+    updated = client.update_activity(activity_id, description=description)
+    return {
+        "id": updated.id,
+        "name": updated.name,
+        "description": updated.description,
+    }
+
+
+@mcp.tool()
+@handle_strava_errors
+async def update_activity_notes(activity_id: int, notes: str) -> dict[str, Any]:
+    """Update the notes/description of an activity.
+
+    Args:
+        activity_id: The unique ID of the activity to update.
+        notes: The new notes/description text for the activity.
+
+    Returns:
+        Updated activity info with the new description.
+    """
+    if activity_id < 1:
+        return {
+            "error": "validation_error",
+            "message": "activity_id must be a positive integer",
+        }
+
+    notes = notes.strip()
+    if not notes:
+        return {
+            "error": "validation_error",
+            "message": "notes cannot be empty",
+        }
+
+    result = await asyncio.to_thread(_update_activity_description, activity_id, notes)
+
+    return {
+        "success": True,
+        "message": "Activity notes updated successfully",
+        "activity": result,
+    }
 
 
 # =============================================================================

@@ -5,7 +5,7 @@ An MCP (Model Context Protocol) server that connects Claude to your Strava data.
 ## Features
 
 - **OAuth Authentication**: Secure authentication with automatic token refresh
-- **Activity Data**: Get recent activities, detailed activity info, and stats
+- **Activity Data**: Get recent activities, detailed activity info, stats, and update notes
 - **Athlete Profile**: Access your Strava profile and statistics
 - **Segments & Routes**: Explore running segments by location, view route details
 - **Clubs & Community**: Browse your clubs, members, and club activities
@@ -95,6 +95,7 @@ If installed with uv, use:
 |------|-------------|
 | `get_activities` | Get recent activities with optional date filters |
 | `get_activity_details` | Get detailed info for a specific activity |
+| `update_activity_notes` | Update the notes/description of an activity |
 | `get_athlete` | Get your athlete profile |
 | `get_athlete_stats` | Get your running/cycling/swimming stats |
 
@@ -128,6 +129,7 @@ If installed with uv, use:
 - "Show me my last 5 Strava activities"
 - "What were my running stats this year?"
 - "Get details for my most recent ride"
+- "Update the notes on my last activity to say 'Great morning run!'"
 - "How many miles did I run last month?"
 - "Find running segments near Central Park"
 - "What clubs am I in?"

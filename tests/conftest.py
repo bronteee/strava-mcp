@@ -167,6 +167,13 @@ def mock_strava_client(
         # Mock get_route
         client_instance.get_route.return_value = mock_route
 
+        # Mock update_activity
+        updated_activity = MagicMock()
+        updated_activity.id = 9876543210
+        updated_activity.name = "Morning Run"
+        updated_activity.description = "Updated notes"
+        client_instance.update_activity.return_value = updated_activity
+
         # Mock token refresh
         client_instance.refresh_access_token.return_value = {
             "access_token": "refreshed_token",

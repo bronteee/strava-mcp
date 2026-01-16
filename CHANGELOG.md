@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-01-16
+
+### Activity Editing
+
+Added ability to update activity notes/description:
+
+- `update_activity_notes` - Update the notes/description of an activity
+
+**Breaking change**: OAuth scope now includes `activity:write`. Existing users will need to re-authenticate to use the new tool.
+
+### Contributors
+
+- Claude Opus 4.5
+
+---
+
 ## 2026-01-14
 
 ### Community Features

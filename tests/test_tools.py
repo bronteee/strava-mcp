@@ -303,6 +303,94 @@ class TestGetActivityDetails:
         mock_strava_client.return_value.get_activity.assert_called_with(123456)
 
 
+class TestUpdateActivityNotes:
+    """Tests for update_activity_notes tool."""
+
+    @pytest.mark.asyncio
+    async def test_updates_activity_notes(
+        self,
+        mock_strava_client,
+        mock_env_vars,
+        valid_tokens,
+    ):
+        """Should update activity notes and return success."""
+        from strava_mcp.server import update_activity_notes
+
+        save_tokens(valid_tokens)
+
+        result = await update_activity_notes(
+            activity_id=9876543210, notes="Great morning run!"
+        )
+
+        assert result["success"] is True
+        assert "updated successfully" in result["message"]
+        assert result["activity"]["id"] == 9876543210
+        assert result["activity"]["description"] == "Updated notes"
+
+    @pytest.mark.asyncio
+    async def test_calls_client_with_correct_params(
+        self, mock_strava_client, mock_env_vars, valid_tokens
+    ):
+        """Should call client.update_activity with correct parameters."""
+        from strava_mcp.server import update_activity_notes
+
+        save_tokens(valid_tokens)
+
+        await update_activity_notes(activity_id=123456, notes="New notes")
+
+        mock_strava_client.return_value.update_activity.assert_called_with(
+            123456, description="New notes"
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_error_for_invalid_activity_id(self):
+        """Should return error for invalid activity_id."""
+        from strava_mcp.server import update_activity_notes
+
+        result = await update_activity_notes(activity_id=0, notes="Some notes")
+
+        assert "error" in result
+        assert result["error"] == "validation_error"
+        assert "positive integer" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_returns_error_for_empty_notes(self):
+        """Should return error for empty notes."""
+        from strava_mcp.server import update_activity_notes
+
+        result = await update_activity_notes(activity_id=123456, notes="")
+
+        assert "error" in result
+        assert result["error"] == "validation_error"
+        assert "cannot be empty" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_returns_error_for_whitespace_only_notes(self):
+        """Should return error for whitespace-only notes."""
+        from strava_mcp.server import update_activity_notes
+
+        result = await update_activity_notes(activity_id=123456, notes="   ")
+
+        assert "error" in result
+        assert result["error"] == "validation_error"
+        assert "cannot be empty" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_strips_whitespace_from_notes(
+        self, mock_strava_client, mock_env_vars, valid_tokens
+    ):
+        """Should strip leading/trailing whitespace from notes."""
+        from strava_mcp.server import update_activity_notes
+
+        save_tokens(valid_tokens)
+
+        await update_activity_notes(activity_id=123456, notes="  Trimmed notes  ")
+
+        mock_strava_client.return_value.update_activity.assert_called_with(
+            123456, description="Trimmed notes"
+        )
+
+
 class TestTokenRefresh:
     """Tests for automatic token refresh."""
 
